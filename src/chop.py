@@ -651,8 +651,8 @@ def main():
                         help='Make use of haplotype information', action='store_true')
     parser.add_argument('-e', '--edge', dest='edge_haplotype',
                         help='Haplotypes are already encoded on the edges', action='store_true')
-    # parser.add_argument('-d', dest='pickle_haplotype',
-                        # help='Haplotype pickle file', type=str)
+    parser.add_argument('-d', dest='pickle_haplotype',
+                        help='Haplotype pickle file', type=str)
     parser.add_argument('-l', dest='log_level', help='Set the logging level',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
     parser.add_argument('--version', action='version', version='%(prog)s: 0.2')
