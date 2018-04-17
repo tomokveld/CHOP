@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 ATTRIBUTE_SET = set(['suffix', 'prefix', 'sequence'])
 
 
-# TODO: replace lambda with list comprehensions where possible
-
 def profile(f):
     def wrap(*args, **kwargs):
         fname = f.func_name
@@ -87,7 +85,6 @@ def natural_sort(xs):
     return sorted(xs, key=lambda key: [convert(c) for c in re.split('([0-9]+)', key)])
 
 
-# TODO: Add more file types
 def eval_file_type(path):
     magic_dict = {
         "\x1f\x8b\x08": "gz",
@@ -144,7 +141,6 @@ def count_dfs(graph, u, t):
 
 
 def count_paths(graph):
-    # TODO: Do this in a single traversal (start_points and end_points)
     start_points = [node for node, pred in graph.pred.items() if len(
         pred) == 0 and len(graph.successors(node)) > 0]
     end_points = [node for node, succ in graph.succ.items() if len(
@@ -199,7 +195,6 @@ def get_node_list(line):
     Reshape list with only specified entries, which are in this case the outgoing and incoming nodes
     """
 
-    # TODO: Use itemgetter instead?
     line = line.split()
     return list(chain([int(line[1])], [int(line[3])]))
 
@@ -241,7 +236,6 @@ def add_node(graph, line):
     else:
         graph.add_node(node, sequence=seq)
 
-    # TODO: This assumes that the input we get is always the same...
     if graph.htypes:
         graph.node[node]['haplotype'] = set(
             [graph.hdict[i] for i in line[4].split(':')[2].split(';')])
@@ -285,7 +279,6 @@ def get_haplo_header(path):
     return header
 
 
-# TODO: Generalize further for more file types.
 class open_gfa():
     def __init__(self, path, mode):
         self.path = path
@@ -381,7 +374,6 @@ def read_gfa_edge(file_path):
 def read_fasta(path, interval):
     with open(path, 'r') as f:
         while True:
-            # TODO: use iter(partial()) instead of islice?
             n_lines = list(islice(f, interval))
             if not n_lines:
                 break
@@ -699,10 +691,7 @@ class NodeInterval(object):
         self._interval = i
 
 
-# TODO: generalize
 def interval_ins_tail(node_from, node_to, new=False):
-    # node_from = deepcopy(node_from)  # TODO: Is this still necessary?
-
     if new:
         node_to_iter = deepcopy(node_to)
     else:
@@ -715,10 +704,7 @@ def interval_ins_tail(node_from, node_to, new=False):
         return node_to_iter
 
 
-# TODO: generalize
 def interval_ins_head(node_from, node_to, new=False):
-    # node_from = deepcopy(node_from)  # TODO: Is this still necessary?
-
     if new:
         node_to_iter = deepcopy(node_to)
     else:
@@ -944,8 +930,6 @@ def mark_radius(graph, edge, radius=1):
 def is_marked_edge(graph, edge):
     for node in edge:
         node_data = graph.node.get(node, True)
-        # TODO: Why not just this?
-        # return isinstance(node_data, bool) or node_data.get('m', True)
         if isinstance(node_data, bool):
             return True
         if node_data.get('m', True):
@@ -1053,203 +1037,5 @@ def is_valid_interval(path, mod_graph=None, input_graph=None, node=None):
     return True
 
 
-######################################################################
-# ooo.                                              o              8 #
-# 8  `8.                                            8              8 #
-# 8   `8 .oPYo. .oPYo. oPYo. .oPYo. .oPYo. .oPYo.  o8P .oPYo. .oPYo8 #
-# 8    8 8oooo8 8    8 8  `' 8oooo8 8    ' .oooo8   8  8oooo8 8    8 #
-# 8   .P 8.     8    8 8     8.     8    . 8    8   8  8.     8    8 #
-# 8ooo'  `Yooo' 8YooP' 8     `Yooo' `YooP' `YooP8   8  `Yooo' `YooP' #
-#               8                                                    #
-#               8                                                    #
-######################################################################
-
-
-def stretch_gaps(graph):
-    """
-    Split nodes with gap(s) (N) into new nodes that either contain gap sequence or 'proper' sequence
-    """
-
-    graph.max_id = max([i for i in graph.nodes()])
-
-    # Iterate over all nodes that have at least one gap in the sequence
-    for node in graph.nodes():
-        if 'N' in graph.node[node]['sequence']:
-            # Split the sequence in a list based on gaps, retain the delimiter
-            seq_to_split = filter(None, re.split(
-                '([N]*)', graph.node[node]['sequence']))
-            seq_to_split_len = len(seq_to_split)
-
-            if seq_to_split_len > 1:
-                orig_out_edges = graph.out_edges(node)
-                orig_successors = graph.successors(node)
-
-                # Process first node
-                graph.remove_edges_from(orig_out_edges)
-                graph.node[node]['sequence'] = seq_to_split[0]
-
-                # Process nodes between first and last nodes
-                prev_node = node
-                for i in seq_to_split[1:-1]:
-                    graph.max_id += 1
-                    graph.add_node(graph.max_id)
-                    graph.node[graph.max_id]['origin'] = node
-                    graph.node[graph.max_id]['sequence'] = i
-                    graph.add_edge(prev_node, graph.max_id)
-
-                    prev_node = graph.max_id
-
-                # Process last node
-                graph.max_id += 1
-                graph.add_node(graph.max_id)
-                graph.node[graph.max_id]['origin'] = node
-                graph.node[graph.max_id]['sequence'] = seq_to_split[-1]
-                graph.add_edge(prev_node, graph.max_id)
-                graph.add_edges_from([(graph.max_id, i)
-                                      for i in orig_successors])
-
-
-def stretch_gaps_cut_excess(graph, node, seq_to_split):
-    orig_out_edges = graph.out_edges(node)
-    orig_in_edges = graph.in_edges(node)
-    orig_successors = graph.successors(node)
-
-    # Process first node
-    graph.remove_edges_from(orig_out_edges)
-    graph.node[node]['sequence'] = seq_to_split[0]
-    if 'N' in graph.node[node]['sequence']:
-        graph.remove_edges_from(orig_in_edges)
-
-    # Process nodes between first and last
-    prev_node = node
-    for i in seq_to_split[1:-1]:
-        graph.max_id += 1
-        graph.add_node(graph.max_id)
-        graph.node[graph.max_id]['origin'] = node
-        graph.node[graph.max_id]['sequence'] = i
-
-        if 'haplotype' in graph.node[node]:
-            graph.node[graph.max_id][
-                'haplotype'] = graph.node[node]['haplotype']
-
-        if 'N' not in i and 'N' not in graph.node[prev_node]['sequence']:
-            graph.add_edge(prev_node, graph.max_id)
-
-        prev_node = graph.max_id
-
-    # Process last node
-    graph.max_id += 1
-    graph.add_node(graph.max_id)
-    graph.node[graph.max_id]['origin'] = node
-    graph.node[graph.max_id]['sequence'] = seq_to_split[-1]
-
-    if 'haplotype' in graph.node[node]:
-        graph.node[graph.max_id]['haplotype'] = graph.node[node]['haplotype']
-
-    if 'N' not in seq_to_split[-1]:
-        graph.add_edges_from([(graph.max_id, i) for i in orig_successors])
-        if 'N' not in graph.node[prev_node]['sequence']:
-            graph.add_edge(prev_node, graph.max_id)
-
-
-def stretch_gaps_cut(graph):
-    """
-    Split nodes with gap(s) (N) into new nodes that either contain gap sequence or 'proper' sequence
-    Nodes that are adjacent to gaps should not be extended to them OR over them, so we can safely remove them!
-    """
-
-    graph.max_id = max([i for i in graph.nodes()])
-
-    # Iterate over all nodes and find those that have at least one gap in the
-    # sequence
-    for node in graph.nodes():
-        if 'N' in graph.node[node]['sequence']:
-            # Split the sequence in a list based on gaps, retain the delimiter
-            # and remove any None sequences
-            seq_to_split = filter(None, re.split(
-                '([N]*)', graph.node[node]['sequence']))
-            seq_to_split_len = len(seq_to_split)
-
-            # Easy case: there is one entry, which must be an N. Just cut the
-            # in/out-going edges
-            if seq_to_split_len == 1:
-                graph.remove_node(node)
-            # There is more sequence meaning we have to split things up
-            else:
-                stretch_gaps_cut_excess(graph, node, seq_to_split)
-
-    for node in graph.nodes():
-        if 'N' in graph.node[node]['sequence']:
-            graph.remove_node(node)
-
-
-def collapse_chains(graph):
-    """
-    Test whether collapsing chains after the indexing 'breaks' will still mean we capture all k-paths
-    """
-
-    starts_of_chain = [node for node, pred in graph.pred.items() if len(
-        pred) == 0 and len(graph.successors(node)) > 0]
-    for node in starts_of_chain:
-        successor_dict = nx.dfs_successors(graph, node)
-        seq = graph.node[node]['sequence']
-        while True:
-            try:
-                tmp = node
-                graph.remove_node(node)
-                (node,) = successor_dict[tmp]
-                seq = ''.join([seq, graph.node[node]['sequence']])
-            except:
-                break
-        graph.max_id += 1
-        graph.add_node(graph.max_id, sequence=seq)
-
-
 if __name__ == '__main__':
-
-    print len(get_kmers("ATCCTAGCTTCCGCCCAC", 4).keys())
-    # graph = read_gfa("/Users/tomb/Downloads/nvc-filt.gfa")
-
-    # topo = nx.topological_sort(graph)
-
-    # sPaths = 1
-
-    # for node in topo:
-    #     sPaths *= max(1, graph.out_degree(node))
-
-    # print sPaths
-
-    # graph = nx.DiGraph()
-    # graph.htypes = set(['1', '2', '3'])
-    # #
-    # graph.add_node(0, sequence='TACG', haplotype=set(['1', '2', '3']))
-    # # | 1
-    # graph.add_node(1, sequence='G', haplotype=set(['1', '3']))
-    # graph.add_node(2, sequence='C', haplotype=set(['2']))
-    # # | 2
-    # graph.add_node(3, sequence='C', haplotype=set(['1', '2', '3']))
-    # # | 3
-    # graph.add_node(4, sequence='C', haplotype=set(['1']))
-    # graph.add_node(5, sequence='T', haplotype=set(['3']))
-    # graph.add_node(6, sequence='GTT', haplotype=set(['2']))
-    # # | 4
-    # graph.add_node(7, sequence='GG', haplotype=set(['1', '2', '3']))
-
-    # #
-    # graph.add_edge(0, 1)
-    # graph.add_edge(0, 2)
-    # #
-    # graph.add_edge(1, 3)
-    # graph.add_edge(2, 3)
-    # #
-    # graph.add_edge(3, 4)
-    # graph.add_edge(3, 5)
-    # graph.add_edge(3, 6)
-    # #
-    # graph.add_edge(4, 7)
-    # graph.add_edge(5, 7)
-    # graph.add_edge(6, 7)
-
-    # write_gfa(graph, "/Users/tomb/Desktop/pipeline.gfa", graph.htypes)
-
-    # print get_kmers('TACGGCGCTGG', 3).keys()
+    pass

@@ -24,12 +24,6 @@ except ImportError:
     import pickle
 
 
-# FIXME: graph.number_of_edges() is linear
-# TODO: Add an option to make an approximate all paths graph by restricting # duplications per node
-# TODO: Optimize: connected_component_subgraphs, interval_ins_head, interval_ins_tail, node_collapser
-# TODO: Implement file clean-up when something goes wrong (multiprocessing)
-
-
 def signal_kill(signal, frame):
     print 'Killed!'
     sys.exit(0)
@@ -54,7 +48,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
 
     affix_node_sequence = graph.node[affix_node]['sequence']
 
-    # TODO: Generalize! Get rid of this ugly construct
     if simple_node_idx:
         direction_label = 'prefix'
     else:
@@ -77,7 +70,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
             if logger.getEffectiveLevel() == 10 and not gf.is_valid_interval(graph.node[cur_node]['prefix_from']):
                 logger.debug("  * Prefix: invalid - {} build from simple_prefix({}, {}, graph)".format(gf.emit_identifier(graph.node[
                     cur_node]['prefix_from']), gf.emit_identifier(graph.node[affix_node]['sequence_from']), graph.k_extend))
-                # FIXME: Clean this up for multiprocessing
                 exit(1)
 
         # Suffix
@@ -95,7 +87,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
             if logger.getEffectiveLevel() == 10 and not gf.is_valid_interval(graph.node[cur_node]['suffix_from']):
                 logger.debug("  * Suffix: invalid - {} build from simple_suffix({}, {}, graph)".format(gf.emit_identifier(graph.node[
                     cur_node]['suffix_from']), gf.emit_identifier(graph.node[affix_node]['sequence_from']), graph.k_extend))
-                # FIXME: Clean this up for multiprocessing
                 exit(1)
 
         logger.debug("  * Deleting edge {}".format(edge))
@@ -104,7 +95,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
     else:
         # If the other node has been extended we can extend across it
         if direction_label in graph.node[affix_node]:
-            # TODO: Generalize!
             if simple_node_idx:
                 logger.debug("EXTENSION: {} got prefix from and across {}".format(
                     cur_node, affix_node))
@@ -116,7 +106,7 @@ def subsequence_extension(graph, edge, simple_node_idx):
                                              'prefix_from'], graph.k_extend - len(affix_node_sequence), graph)
 
                 logger.debug("  * Prefix across: {} build from simple_prefix({}, {})".format(gf.emit_identifier(over_node),
-                                                                                         gf.emit_identifier(graph.node[affix_node]['prefix_from']), graph.k_extend - len(affix_node_sequence)))
+                                                                                             gf.emit_identifier(graph.node[affix_node]['prefix_from']), graph.k_extend - len(affix_node_sequence)))
 
                 graph.node[cur_node]['prefix_from'] = gf.interval_ins_tail(
                     in_node, over_node, True)
@@ -126,7 +116,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
                 if logger.getEffectiveLevel() == 10 and not gf.is_valid_interval(graph.node[cur_node]['prefix_from']):
                     logger.debug("  * Prefix across: invalid - {} build from interval_ins_tail({}, {}, True)".format(gf.emit_identifier(
                         graph.node[cur_node]['prefix_from']), gf.emit_identifier(in_node), gf.emit_identifier(over_node)))
-                    # FIXME: Clean this up for multiprocessing
                     exit(1)
 
             else:
@@ -150,7 +139,6 @@ def subsequence_extension(graph, edge, simple_node_idx):
                 if logger.getEffectiveLevel() == 10 and not gf.is_valid_interval(graph.node[cur_node]['suffix_from']):
                     logger.debug("  * Suffix across: invalid - {} build from interval_ins_head({}, {}, True)".format(gf.emit_identifier(
                         graph.node[cur_node]['suffix_from']), gf.emit_identifier(in_node), gf.emit_identifier(over_node)))
-                    # FIXME: Clean this up for multiprocessing
                     exit(1)
 
             graph.remove_edge(*edge)
@@ -165,23 +153,14 @@ def node_collapser(graph, node, edge_idx):
     Attempt to collapse a pair of nodes into a single node
     """
 
-    # TODO: Generalize!
     if edge_idx:
         (neighbor_node,) = graph.predecessors(node)
     else:
         (neighbor_node,) = graph.successors(node)
 
-    # TODO: Somehow it is possible to get an edge to self when using graphs with cycles, this is a dirty fix
-    #       to get rid of it. However this is just treating the symptom, still need to find the cause.
-    #       Path extraction validity is also not certain in this case.
-    # if neighbor_node == node:
-        # graph.remove_edge(node, node)
-        # return
-
     assert(len(graph.successors(neighbor_node)
                if edge_idx else graph.predecessors(neighbor_node)) == 1)
 
-    # TODO: Generalize!
     if edge_idx:
         edge = (neighbor_node, node)
     else:
@@ -194,7 +173,6 @@ def node_collapser(graph, node, edge_idx):
         graph.node[node][attribute] = deepcopy(
             graph.node[neighbor_node][attribute])
 
-    # TODO: Generalize!
     if edge_idx:
         logger.debug("COLLAPSE: {} --> {}".format(
             neighbor_node, node))
@@ -215,7 +193,6 @@ def node_collapser(graph, node, edge_idx):
             'sequence_from'], graph.node[node]['sequence_from'])
 
     for edge in inherit_edges_list:
-        # TODO: Generalize!
         if edge_idx:
             new_edge = (edge[edge_idx ^ 1], node)
         else:
@@ -238,7 +215,6 @@ def node_splitter(graph, node, edge_idx):
     Split nodes to resolve edge ambiguities
     """
 
-    # TODO: Generalize!
     if edge_idx:  # (v)
         edge_list = graph.in_edges(node)
         inherit_edge_list = graph.out_edges(node)
@@ -262,7 +238,6 @@ def node_splitter(graph, node, edge_idx):
             graph.node[graph.max_id][key] = deepcopy(
                 graph.node[node][key])
 
-        # TODO: Generalize!
         # Single edge taken from the original node
         if edge_idx:
             new_edge = (edge[edge_idx ^ 1], graph.max_id)
@@ -283,7 +258,6 @@ def node_splitter(graph, node, edge_idx):
                 graph[i[0]][i[1]] & graph[new_edge[0]][new_edge[1]])]
 
             for i in valid_edges:
-                # TODO: Generalize!
                 # Introduce edges in the opposite direction
                 if edge_idx:
                     new_opposite_edge = (graph.max_id, i[edge_idx])
@@ -298,7 +272,6 @@ def node_splitter(graph, node, edge_idx):
                     new_opposite_edge, graph[new_opposite_edge[0]][new_opposite_edge[1]].to01()))
         else:
             for i in inherit_edge_list:
-                # TODO: Generalize!
                 new_opposite_edge = (graph.max_id, i[edge_idx]) if edge_idx else (
                     i[edge_idx], graph.max_id)
                 graph.add_edge(*new_opposite_edge)
@@ -320,11 +293,6 @@ def node_splitter(graph, node, edge_idx):
                 logger.debug("  * Modified haplotype edge: {} to {}".format(
                     i, graph[i[0]][i[1]].to01()))
 
-    # Check whether the original node and its duplicates are candidates for
-    # collapsing
-    # for node in processed_nodes:
-        # node_collapser(graph, node, edge_idx)
-
 
 def get_sni(graph, edge, edge_degree):
     simple_node_idx = [idx for idx, val in enumerate(edge_degree) if val == 1]
@@ -335,7 +303,6 @@ def get_sni(graph, edge, edge_degree):
     # Resolve cases where both nodes are possible candidates, get best choice
     elif len(simple_node_idx) > 1:
         # See which of the nodes has sufficient sequence or is already extended
-        # TODO: generalize
         candidate_nodes = [idx for idx in simple_node_idx if len(graph.node[edge[idx]][
                                                                  'sequence']) >= graph.k_extend or graph.node[edge[idx]].get('suffix' if idx else 'prefix')]
         # Get rid of the node that is a candidate for extension
@@ -376,10 +343,6 @@ def first_sweep(graph):
         if simple_node_idx >= 0 and not all([i == 1 for i in edge_degree]):
             subsequence_extension(graph, edge, simple_node_idx)
 
-        # NOTE: Old chop
-        # if simple_node_idx >= 0:
-            # subsequence_extension(graph, edge, simple_node_idx)
-
 
 def process_subgraph(graph):
     g_edges = graph.edges()
@@ -388,54 +351,12 @@ def process_subgraph(graph):
     for node in graph.nodes():
         graph.node[node]['m'] = False
 
-    # NOTE: Old chop
-    # for edge in g_edges:
-    #     if not gf.is_marked_edge(graph, edge):
-    #         edge_degree = (gf.out_deg(
-    #             graph, edge[0]), gf.in_deg(graph, edge[1]))
-    #         simple_node_idx = get_sni(graph, edge, edge_degree)
-
-    #         if simple_node_idx < 0 or not subsequence_extension(graph, edge, simple_node_idx):
-    #             if all([i == 1 for i in edge_degree]):
-    #                 gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-    #                 rand_choice = getrandbits(1)
-    #                 node_collapser(graph, edge[rand_choice], rand_choice)
-    #             else:
-    #                 gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-    #                 split_idx = max(idx for (idx, val)
-    #                                 in enumerate(edge_degree) if val > 1)
-    #                 node_splitter(graph, edge[split_idx], split_idx)
-
     # Process all edges that are unmarked
     for edge in g_edges:
         if not gf.is_marked_edge(graph, edge):
             edge_degree = (gf.out_deg(
                 graph, edge[0]), gf.in_deg(graph, edge[1]))
             simple_node_idx = get_sni(graph, edge, edge_degree)
-
-            # TODO: Clean this up
-            # if simple_node_idx < 0:
-            #     if all([i == 1 for i in edge_degree]):
-            #         gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-            #         rand_choice = getrandbits(1)
-            #         node_collapser(graph, edge[rand_choice], rand_choice)
-            #     else:
-            #         gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-            #         split_idx = min(idx for (idx, val)
-            #                         in enumerate(edge_degree) if val > 1)
-            #         node_splitter(graph, edge[split_idx], split_idx)
-            # else:
-            #     if all([i == 1 for i in edge_degree]):
-            #         gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-            #         rand_choice = getrandbits(1)
-            #         node_collapser(graph, edge[rand_choice], rand_choice)
-            #     elif subsequence_extension(graph, edge, simple_node_idx):
-            #         pass
-            #     else:
-            #         gf.mark_radius(graph, edge, radius=MARK_RADIUS)
-            #         split_idx = min(idx for (idx, val)
-            #                         in enumerate(edge_degree) if val > 1)
-            #         node_splitter(graph, edge[split_idx], split_idx)
 
             if all([i == 1 for i in edge_degree]):
                 gf.mark_radius(graph, edge, radius=MARK_RADIUS)
@@ -480,7 +401,6 @@ def full_index(graph, k, graph_queue, s_buffer, haplotype, prefix='', queue_coun
             if min_n_components(co, 2):
                 extend_list = [graph.subgraph(component) for component in co]
 
-                # TODO: Keep some subgraphs locally in memory to process
                 graph.clear()
 
                 if extend_list:
@@ -513,7 +433,6 @@ class Counter(object):
         return self.val.value
 
 
-# FIXME: Possibility of deadlock if one of the processes crashes
 def worker_main(queue, counter, graph_counter, queue_counter, k, file_list, working_directory, uniq_id, haplotype, prefix=''):
     worker_name = multiprocessing.current_process().name
     logger.debug("Started: {}".format(worker_name))
@@ -525,7 +444,6 @@ def worker_main(queue, counter, graph_counter, queue_counter, k, file_list, work
 
     file_list.append(out_path)  #
 
-    # TODO: Change to -> with open: ....
     fp_out = open(out_path, 'w')
     s_buffer = []
 
@@ -621,7 +539,6 @@ def serial(graph, k, out_file, haplotype, prefix_sequence=''):
         # Iterate serially over each component in the queue
         for subgraph in serial_graph_wrapper(cc_queue, gf.connected_component_subgraphs(graph, s_buffer)):
 
-            # FIXME: Something happened with connected component detection in networkx
             if len(subgraph.nodes()) == 0:
                 continue
 
@@ -666,14 +583,11 @@ def init_parallel(args):
     file_list = manager.list()
     file_list.append(out_path)
 
-    # TODO: IF multiprocessing is used, the workers should be initialized as soon as possible! This is a problem
-    #       in python where memory is inherited from the main process to the workers, hence the graph is loaded and
-    #       processed after the workers have started up. This can result in idle workers while the graph is being
-    #       loaded and preprocessed, wasting resource.
     pool = multiprocessing.Pool(
         processes=args.processes, initializer=worker_main, initargs=((cc_queue, counter, graph_counter, queue_counter, args.kmer, file_list, working_directory, uniq_id, args.haplotype, shared_prefix)))
 
     return (pool, cc_queue, counter, out_path, file_list, queue_counter, shared_prefix)
+
 
 @profile
 def init_pickle_graph(args):
@@ -737,8 +651,8 @@ def main():
                         help='Make use of haplotype information', action='store_true')
     parser.add_argument('-e', '--edge', dest='edge_haplotype',
                         help='Haplotypes are already encoded on the edges', action='store_true')
-    parser.add_argument('-d', dest='pickle_haplotype',
-                        help='Haplotype pickle file', type=str)
+    # parser.add_argument('-d', dest='pickle_haplotype',
+                        # help='Haplotype pickle file', type=str)
     parser.add_argument('-l', dest='log_level', help='Set the logging level',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
     parser.add_argument('--version', action='version', version='%(prog)s: 0.2')
