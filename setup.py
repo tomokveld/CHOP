@@ -9,7 +9,8 @@ setup(
     name="chop",
     version="0.2",
     packages=find_packages(),
-    scripts=['src/chop.py', 'src/graph_functions.py', 'src/eval_mem.py', 'src/colorer.py'],
+    scripts=['src/chop.py', 'src/graph_functions.py',
+             'src/eval_mem.py', 'src/colorer.py'],
 
     install_requires=['docutils>=0.3', 'networkx==1.9', 'bitarray'],
     package_data={
