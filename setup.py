@@ -9,7 +9,7 @@ setup(
     name="chop",
     version="0.2",
     packages=find_packages(),
-    scripts=['src/chop.py', 'src/graph_functions.py',
+    scripts=['src/main.py', 'src/chop.py', 'src/graph_functions.py',
              'src/eval_mem.py', 'src/colorer.py'],
 
     install_requires=['docutils>=0.3', 'networkx==1.9', 'bitarray'],
@@ -18,7 +18,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'chop = chop:main'
+            'chop = main:main'
         ]
     },
 

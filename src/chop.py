@@ -166,9 +166,6 @@ def node_collapser(graph, node, edge_idx):
     else:
         edge = (node, neighbor_node)
 
-    # * Prepend/Append sequence to current node from neighbor_node
-    # * Inherit any attributes
-    # * Inherit edges (if any) in the opposite direction of neighbor_node (including haplotype info)
     for attribute in [i for i in graph.node[neighbor_node].keys() if i in ATTRIBUTE_SET]:
         graph.node[node][attribute] = deepcopy(
             graph.node[neighbor_node][attribute])
@@ -215,10 +212,10 @@ def node_splitter(graph, node, edge_idx):
     Split nodes to resolve edge ambiguities
     """
 
-    if edge_idx:  # (v)
+    if edge_idx:
         edge_list = graph.in_edges(node)
         inherit_edge_list = graph.out_edges(node)
-    else:  # u
+    else:
         edge_list = graph.out_edges(node)
         inherit_edge_list = graph.in_edges(node)
 
@@ -339,7 +336,6 @@ def first_sweep(graph):
         edge_degree = (gf.out_deg(graph, edge[0]), gf.in_deg(graph, edge[1]))
         simple_node_idx = get_sni(graph, edge, edge_degree)
 
-        # Only extent pairs with a candidate node and pairs that don't have a o---o motive (collapse target)
         if simple_node_idx >= 0 and not all([i == 1 for i in edge_degree]):
             subsequence_extension(graph, edge, simple_node_idx)
 
@@ -397,7 +393,7 @@ def full_index(graph, k, graph_queue, s_buffer, haplotype, prefix='', queue_coun
                 else:
                     co.append(component)
 
-            # If the number of components exceeds the cutoff split them into subgraphs
+            # If the number of components exceeds the cutoff, split them into subgraphs
             if min_n_components(co, 2):
                 extend_list = [graph.subgraph(component) for component in co]
 
@@ -590,29 +586,6 @@ def init_parallel(args):
 
 
 @profile
-def init_pickle_graph(args):
-    graph = gf.read_gfa_alt(args.gfa, True)
-    logger.debug("Started: loading haplotypes")
-    with open(args.pickle_haplotype, 'r') as f:
-        haplotype_dict = pickle.load(f)
-    logger.debug("Finished: loading haplotypes")
-
-    logger.debug("Started: setting haplotypes")
-    for key, v in haplotype_dict.iteritems():
-        for node in v:
-            graph.node[node]['haplotype'] = key
-    logger.debug("Finished: setting haplotypes")
-
-    logger.debug("Memory usage of haplotype_dict: {}".format(
-        total_size(haplotype_dict)))
-
-    haplotype_dict.clear()
-    gf.move_haplotype_to_edges(graph)
-
-    return graph
-
-
-@profile
 def init_haplotype_graph(args):
     if args.edge_haplotype:
         graph = gf.read_gfa_edge(args.gfa)
@@ -629,61 +602,3 @@ def init_haplotype_graph(args):
         gf.move_haplotype_to_edges(graph)
 
     return graph
-
-
-def main():
-    logging.basicConfig(stream=sys.stdout,
-                        format='%(asctime)s - %(levelname)s:%(name)s:%(message)s')
-
-    parser = argparse.ArgumentParser(
-        description='Index k-length paths in provided graph in GFA format with or without haplotype constraints.')
-    parser.add_argument('-g', '--gfa', dest='gfa',
-                        help='Input GFA file', type=str, required=True)
-    parser.add_argument('-k', dest='kmer',
-                        help='k-mer value', type=int, required=True)
-    parser.add_argument('-p', dest='processes',
-                        help='Number of parallel processes to start', type=int)
-    parser.add_argument('-o', dest='output',
-                        help='Output file', type=str, required=True)
-    parser.add_argument('-s', '--prefix', dest='prefix',
-                        help='Optional prefix for each path entry', type=str, default='')
-    parser.add_argument('-H', '--haplotype', dest='haplotype',
-                        help='Make use of haplotype information', action='store_true')
-    parser.add_argument('-e', '--edge', dest='edge_haplotype',
-                        help='Haplotypes are already encoded on the edges', action='store_true')
-    parser.add_argument('-d', dest='pickle_haplotype',
-                        help='Haplotype pickle file', type=str)
-    parser.add_argument('-l', dest='log_level', help='Set the logging level',
-                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
-    parser.add_argument('--version', action='version', version='%(prog)s: 0.2')
-    args = parser.parse_args()
-
-    if args.log_level:
-        logging.getLogger().setLevel(getattr(logging, args.log_level))
-
-    if args.processes and args.processes > 1:
-        (pool, cc_queue, counter, out_path, file_list,
-         queue_counter, shared_prefix) = init_parallel(args)
-
-    if args.pickle_haplotype:
-        graph = init_pickle_graph(args)
-    elif args.haplotype:
-        graph = init_haplotype_graph(args)
-    else:
-        graph = gf.read_gfa(args.gfa, False)
-
-    gf.set_interval_nodes(graph)
-    graph.k_extend = args.kmer - 1
-    graph.max_id = max([i for i in graph.nodes()])
-
-    first_sweep(graph)
-
-    if args.processes and args.processes > 1:
-        parallel(graph, pool, cc_queue, counter, out_path, args.output,
-                 file_list, args.processes, queue_counter, shared_prefix.value)
-    else:
-        serial(graph, args.kmer, args.output, args.haplotype, args.prefix)
-
-
-if __name__ == '__main__':
-    main()
