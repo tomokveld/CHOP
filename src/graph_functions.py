@@ -272,7 +272,6 @@ def get_haplo_header(path):
     with open_gfa(path, 'r') as fin:
         (start, end) = get_header_offset(fin)
 
-        # Not very general
         header = [i for i in (re.split("[\t\:]", fin.read(
             end - start).rstrip().split('\n')[-1])[-1].split(';')) if i]
 
@@ -548,8 +547,6 @@ def get_k_paths(graph, k, k_dict=None, source=None, sink=None):
         node = node_queue.popleft()
 
         node_succ = set(graph.successors(node))
-
-        # This is the costliest operation since seen_set will keep growing...
         unseen_set = node_succ - seen_set
 
         # Only add successors to the queue that are not in seen_set
@@ -565,12 +562,12 @@ def get_k_paths(graph, k, k_dict=None, source=None, sink=None):
         # (k_min, k_max) = max(0, len(seq) - k + 1), len(seq)
         k_min = max(0, len(seq) - k + 1)
 
-        # K-mers that fall within the current node
+        # k-mers that fall within the current node
         for i in xrange(k_min):
             kmer = seq[i:i + k]
             k_dict[kmer] += 1
 
-        # K-mers across paths
+        # k-mers across paths
         for path in over_paths(graph, k, node):
             n_seq = seq[k_min:] + path
             get_kmers(n_seq, k, k_dict)
@@ -1035,7 +1032,3 @@ def is_valid_interval(path, mod_graph=None, input_graph=None, node=None):
         return ''.join(s) == mod_graph.node[node]['sequence']
 
     return True
-
-
-if __name__ == '__main__':
-    pass

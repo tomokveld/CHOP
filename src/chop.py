@@ -1,7 +1,6 @@
 from collections import deque
 from copy import deepcopy
 from ctypes import c_char_p
-from eval_mem import total_size
 from graph_functions import profile
 from random import choice, getrandbits
 from time import sleep
