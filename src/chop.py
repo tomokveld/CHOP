@@ -37,6 +37,28 @@ MARK_RADIUS = 1
 ATTRIBUTE_SET = set(['prefix', 'suffix', 'prefix_from', 'suffix_from'])
 
 
+class Counter(object):
+    def __init__(self, init=0):
+        self.val = multiprocessing.Value('i', init)
+
+    def increment(self, n=1):
+        with self.val.get_lock():
+            self.val.value += n
+
+    def decrement(self, n=1):
+        with self.val.get_lock():
+            self.val.value -= n
+
+    @property
+    def value(self):
+        return self.val.value
+
+
+collapse_count = Counter(0)
+extend_count = Counter(0)
+duplicate_count = Counter(0)
+
+
 def subsequence_extension(graph, edge, simple_node_idx):
     """
     Attempt to extend subsequence between a pair of nodes
@@ -88,8 +110,9 @@ def subsequence_extension(graph, edge, simple_node_idx):
                     cur_node]['suffix_from']), gf.emit_identifier(graph.node[affix_node]['sequence_from']), graph.k_extend))
                 exit(1)
 
-        logger.debug("  * Deleting edge {}".format(edge))
         graph.remove_edge(*edge)
+        logger.debug("  * Deleting edge {}".format(edge))
+        extend_count.increment()
         return True
     else:
         # If the other node has been extended we can extend across it
@@ -142,6 +165,7 @@ def subsequence_extension(graph, edge, simple_node_idx):
 
             graph.remove_edge(*edge)
             logger.debug("  * Removing edge {}".format(edge))
+            extend_count.increment()
             return True
         else:
             return False
@@ -168,6 +192,9 @@ def node_collapser(graph, node, edge_idx):
     for attribute in [i for i in graph.node[neighbor_node].keys() if i in ATTRIBUTE_SET]:
         graph.node[node][attribute] = deepcopy(
             graph.node[neighbor_node][attribute])
+
+    # if logger.getEffectiveLevel() == 10:
+    #     print("Test")
 
     if edge_idx:
         logger.debug("COLLAPSE: {} --> {}".format(
@@ -204,6 +231,7 @@ def node_collapser(graph, node, edge_idx):
 
     graph.remove_node(neighbor_node)
     logger.debug("  * Delete node {}".format(neighbor_node))
+    collapse_count.increment()
 
 
 def node_splitter(graph, node, edge_idx):
@@ -275,6 +303,7 @@ def node_splitter(graph, node, edge_idx):
 
     logger.debug("  * Deleting edges from: {}".format(edge_list[1:]))
     graph.remove_edges_from(edge_list[1:])
+    duplicate_count.increment()
 
     if graph.htypes:
         for i in inherit_edge_list:
@@ -411,23 +440,6 @@ def full_index(graph, k, graph_queue, s_buffer, haplotype, prefix='', queue_coun
             process_subgraph(graph)
 
 
-class Counter(object):
-    def __init__(self, init=0):
-        self.val = multiprocessing.Value('i', init)
-
-    def increment(self, n=1):
-        with self.val.get_lock():
-            self.val.value += n
-
-    def decrement(self, n=1):
-        with self.val.get_lock():
-            self.val.value -= n
-
-    @property
-    def value(self):
-        return self.val.value
-
-
 def worker_main(queue, counter, graph_counter, queue_counter, k, file_list, working_directory, uniq_id, haplotype, prefix=''):
     worker_name = multiprocessing.current_process().name
     logger.debug("Started: {}".format(worker_name))
@@ -523,6 +535,8 @@ def parallel(graph, pool, cc_queue, counter, out_path, out_file, file_list, proc
 
     merge_files(out_file, file_list)
 
+    logger.info("Operations: Collapse: {0}, Extension: {1}, Duplication: {2} ".format(collapse_count.value, extend_count.value, duplicate_count.value))
+
 
 @profile
 def serial(graph, k, out_file, haplotype, prefix_sequence=''):
@@ -556,6 +570,7 @@ def serial(graph, k, out_file, haplotype, prefix_sequence=''):
         fp_out.write(''.join(s_buffer))
         s_buffer[:] = []
 
+    logger.info("Operations: Collapse: {0}, Extension: {1}, Duplication: {2} ".format(collapse_count.value, extend_count.value, duplicate_count.value))
 
 def init_parallel(args):
     uniq_id = str(uuid4())
@@ -590,7 +605,11 @@ def init_haplotype_graph(args):
         graph = gf.read_gfa_edge(args.gfa)
         gf.set_to_bit_edges(graph)
     else:
-        graph = gf.read_gfa(args.gfa, True)
+        if gf.check_reveal_gfa_header(args.gfa):
+            graph = gf.read_gfa_reveal(args.gfa)
+        else:
+            graph = gf.read_gfa(args.gfa, True)
+
         for node in graph.nodes():
             try:
                 graph.node[node]['haplotype']

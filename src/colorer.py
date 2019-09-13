@@ -6,18 +6,20 @@ import logging
 def add_coloring_to_emit_windows(fn):
     def _out_handle(self):
         import ctypes
+
         return ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)
 
     out_handle = property(_out_handle)
 
     def _set_color(self, code):
         import ctypes
+
         # Constants from the Windows API
         self.STD_OUTPUT_HANDLE = -11
         hdl = ctypes.windll.kernel32.GetStdHandle(self.STD_OUTPUT_HANDLE)
         ctypes.windll.kernel32.SetConsoleTextAttribute(hdl, code)
 
-    setattr(logging.StreamHandler, '_set_color', _set_color)
+    setattr(logging.StreamHandler, "_set_color", _set_color)
 
     def new(*args):
         FOREGROUND_BLUE = 0x0001  # text color contains blue.
@@ -25,7 +27,7 @@ def add_coloring_to_emit_windows(fn):
         FOREGROUND_RED = 0x0004  # text color contains red.
         FOREGROUND_INTENSITY = 0x0008  # text color is intensified.
         FOREGROUND_WHITE = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED
-       # winbase.h
+        # winbase.h
         STD_INPUT_HANDLE = -10
         STD_OUTPUT_HANDLE = -11
         STD_ERROR_HANDLE = -12
@@ -52,15 +54,20 @@ def add_coloring_to_emit_windows(fn):
         BACKGROUND_INTENSITY = 0x0080  # background color is intensified.
 
         levelno = args[1].levelno
-        if(levelno >= 50):
-            color = BACKGROUND_YELLOW | FOREGROUND_RED | FOREGROUND_INTENSITY | BACKGROUND_INTENSITY
-        elif(levelno >= 40):
+        if levelno >= 50:
+            color = (
+                BACKGROUND_YELLOW
+                | FOREGROUND_RED
+                | FOREGROUND_INTENSITY
+                | BACKGROUND_INTENSITY
+            )
+        elif levelno >= 40:
             color = FOREGROUND_RED | FOREGROUND_INTENSITY
-        elif(levelno >= 30):
+        elif levelno >= 30:
             color = FOREGROUND_YELLOW | FOREGROUND_INTENSITY
-        elif(levelno >= 20):
+        elif levelno >= 20:
             color = FOREGROUND_GREEN
-        elif(levelno >= 10):
+        elif levelno >= 10:
             color = FOREGROUND_MAGENTA
         else:
             color = FOREGROUND_WHITE
@@ -69,6 +76,7 @@ def add_coloring_to_emit_windows(fn):
         ret = fn(*args)
         args[0]._set_color(FOREGROUND_WHITE)
         return ret
+
     return new
 
 
@@ -76,29 +84,32 @@ def add_coloring_to_emit_ansi(fn):
     # add methods we need to the class
     def new(*args):
         levelno = args[1].levelno
-        if(levelno >= 50):
-            color = '\x1b[31m'  # red
-        elif(levelno >= 40):
-            color = '\x1b[31m'  # red
-        elif(levelno >= 30):
-            color = '\x1b[33m'  # yellow
-        elif(levelno >= 20):
-            color = '\x1b[32m'  # green
-        elif(levelno >= 10):
-            color = '\x1b[35m'  # pink
+        if levelno >= 50:
+            color = "\x1b[31m"  # red
+        elif levelno >= 40:
+            color = "\x1b[31m"  # red
+        elif levelno >= 30:
+            color = "\x1b[33m"  # yellow
+        elif levelno >= 20:
+            color = "\x1b[32m"  # green
+        elif levelno >= 10:
+            color = "\x1b[35m"  # pink
         else:
-            color = '\x1b[0m'  # normal
-        args[1].msg = color + args[1].msg + '\x1b[0m'  # normal
+            color = "\x1b[0m"  # normal
+        args[1].msg = color + args[1].msg + "\x1b[0m"  # normal
         # print "after"
         return fn(*args)
+
     return new
 
+
 import platform
-if platform.system() == 'Windows':
+
+if platform.system() == "Windows":
     # Windows does not support ANSI escapes
     logging.StreamHandler.emit = add_coloring_to_emit_windows(
-        logging.StreamHandler.emit)
+        logging.StreamHandler.emit
+    )
 else:
     # all non-Windows platforms support ANSI escapes
-    logging.StreamHandler.emit = add_coloring_to_emit_ansi(
-        logging.StreamHandler.emit)
+    logging.StreamHandler.emit = add_coloring_to_emit_ansi(logging.StreamHandler.emit)

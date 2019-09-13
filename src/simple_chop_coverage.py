@@ -118,11 +118,9 @@ def gen_alignment_coverage(in_aln, coverage_dict, interval_dict):
                 if prev_node:
                     if prev_node != node and pileup.pos - prev_pileuppos == 1:
                         if not coverage_dict[prev_node, node]:
-                            coverage_dict[prev_node, node] = min(
-                                prev_nsegments, pileup.nsegments)
+                            coverage_dict[prev_node, node] = min(prev_nsegments, pileup.nsegments)
                         else:
-                            coverage_dict[prev_node,
-                                          node] += min(prev_nsegments, pileup.nsegments)
+                            coverage_dict[prev_node, node] += min(prev_nsegments, pileup.nsegments)
 
                 prev_node = node
                 prev_nsegments = pileup.nsegments

@@ -14,7 +14,7 @@ setup(
 
     install_requires=['docutils>=0.3', 'networkx==1.9', 'bitarray'],
     package_data={
-        '': ['*.txt', '*.rst'],
+        '': [],
     },
     entry_points={
         'console_scripts': [

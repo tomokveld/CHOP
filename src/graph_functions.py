@@ -6,10 +6,12 @@ from itertools import islice, chain, product
 from mmap import mmap
 from string import maketrans
 from time import time
+import bz2
 import gzip
 import logging
 import networkx as nx
 import re
+import zipfile
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +89,9 @@ def natural_sort(xs):
 
 def eval_file_type(path):
     magic_dict = {
-        "\x1f\x8b\x08": "gz",
-        "\x42\x5a\x68": "bz2",
-        "\x50\x4b\x03\x04": "zip"
+        "\x1f\x8b\x08": 1,  # gz
+        "\x50\x4b\x03\x04": 2,  # zip
+        "\x42\x5a\x68": 3  # bz2
     }
 
     max_len = max(len(x) for x in magic_dict)
@@ -294,12 +296,22 @@ class open_gfa():
     def _gfa_helper(file_path, mode):
         file_type = eval_file_type(file_path)
         if file_type:
-            if "gz" == file_type:
-                return gzip.open(file_path, 'r')
+            if file_type == 1:
+                # It might actually be faster to first use gzip.open and then io.BufferedReader
+                return gzip.open(file_path)
+            elif file_type == 2:
+                with zipfile.ZipFile(file_path) as zipf:
+                    namelist = zipf.namelist()
+                    if len(namelist) != 1:
+                        raise ValueError(
+                            "Incorrect archive count: {}".format(namelist))
+                    return zipf.open(namelist[0])
+            elif file_type == 3:
+                return bz2.BZ2File(file_path, mode)
             else:
-                raise Exception
+                raise NotImplementedError("This file type is not supported!")
         else:
-            return open(file_path, 'r')
+            return open(file_path, mode)
 
 
 @profile
@@ -327,21 +339,16 @@ def read_gfa(file_path, haplotype=False):
     return graph
 
 
-# A temporary alternative for 1000G data
 @profile
-def read_gfa_alt(file_path, haplotype=False):
+def read_gfa_reveal(file_path):
     """
     Read GFA file, parse and return graph
     """
 
     graph = nx.DiGraph()
-
-    if haplotype:
-        haplotypes = get_haplo_header(file_path)
-        graph.htypes = set(haplotypes)
-        graph.hdict = dict([(str(i), j) for i, j in enumerate(haplotypes)])
-    else:
-        graph.htypes = 0
+    graph.htypes = set([])
+    graph.hdict = {}
+    count = 0
 
     with open_gfa(file_path, 'r') as file_in:
         for line in file_in:
@@ -349,7 +356,23 @@ def read_gfa_alt(file_path, haplotype=False):
                 add_node_alt(graph, line)
             elif line.startswith('L'):
                 create_connection(graph, line)
+            elif line.startswith('P'):
+                line = line.split('\t')
+                if line[1].startswith('*'):
+                    continue
 
+                haplotype = line[1]
+
+                graph.htypes.add(haplotype)
+                graph.hdict[haplotype] = count
+                count += 1
+
+                for node in line[2].split(','):
+                    node = int(node.rstrip('+'))
+                    if 'haplotype' in graph.node[node]:
+                        graph.node[node]['haplotype'].add(haplotype)
+                    else:
+                        graph.node[node]['haplotype'] = set([haplotype])
     return graph
 
 
@@ -436,66 +459,6 @@ def concat_sequence(graph, node):
         ATTRIBUTE_SET.intersection(graph.node[node].keys()))
 
     return ''.join([graph.node[node][i] for i in seq_attributes])
-
-
-def get_stats(graph, k):
-    """
-    Number of nodes
-    Number of edges
-    Number of nodes with prefix
-    Number of nodes with suffix
-    Number of nodes with both a suffix and prefix
-    Number of nodes without a prefix and suffix
-    Average sequence length per node
-    Shortest sequence length over all nodes
-    Longest sequence length over all nodes
-    Number of splits
-    Numbers of collapses
-    Haplotypes
-    Number of haplotypes
-    """
-
-    num_nodes = graph.number_of_nodes()
-
-    nodes = graph.nodes()
-    nodes_prefix = [i for i in nodes if 'prefix' in graph.node[i].keys()]
-    nodes_suffix = [i for i in nodes if 'suffix' in graph.node[i].keys()]
-
-    nodes_both = set(nodes_prefix).intersection(nodes_suffix)
-    nodes_prefix = set(nodes_prefix).difference(nodes_both)
-    nodes_suffix = set(nodes_suffix).difference(nodes_both)
-    nodes_none = set(nodes).difference(nodes_both, nodes_suffix, nodes_prefix)
-
-    avg_len = len(concat_sequence(graph, nodes[0]))
-    min_len, max_len = avg_len, avg_len
-    for node in nodes[1:]:
-        cur_len = len(concat_sequence(graph, node))
-        avg_len += cur_len
-        max_len = max(max_len, cur_len)
-        min_len = min(min_len, cur_len)
-    avg_len /= float(num_nodes)
-
-    stat_str = "Graph statistics for k = %i:\n\
-    \tNumber of nodes: %i\n\
-    \tNumber of edges: %i\n\
-    \tNumber of nodes with prefix: %i, suffix: %i, both: %i, or neither: %i\n\
-    \tMinimum sequence length: %i\n\
-    \tMaximum sequence length: %i\n\
-    \tAverage sequence length: %.2f\
-    " % (k, num_nodes, graph.number_of_edges(), len(nodes_prefix), len(nodes_suffix), len(nodes_both), len(nodes_none), min_len, max_len, avg_len)
-
-    if hasattr(graph, 'n_split') and graph.n_split > 0:
-        stat_str += "\n\tNumber of splits: %i" % graph.n_split
-
-    if hasattr(graph, 'n_collapse') and graph.n_collapse > 0:
-        stat_str += "\n\tNumber of collapses: %i" % graph.n_collapse
-
-    if graph.htypes:
-        stat_str += "\n\tNumber of haplotypes: %i\n\
-    \tHaplotypes: " % len(graph.htypes)
-        stat_str += ' '.join(sorted(graph.htypes)[:5])
-
-    return stat_str
 
 
 def over_paths(graph, k, node):
@@ -817,6 +780,13 @@ def validate_interval_graph(graph, a_graph):
                 return False
         else:
             return True
+
+
+def check_reveal_gfa_header(gfa_path):
+    with open(gfa_path, 'r') as f_in:
+        (__, end) = get_header_offset(f_in, 'H')
+        header = f_in.read(end)
+    return "reveal" in header
 
 
 def unw_longest_path(in_graph, destructive=False):
